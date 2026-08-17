@@ -26,6 +26,7 @@ jobs:
 
       - name: Collect and persist snapshots
         env:
+          PYTHONPATH: ${{ github.workspace }}/src
           CMC_API_KEY: ${{ secrets.CMC_API_KEY }}
           FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
           FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
