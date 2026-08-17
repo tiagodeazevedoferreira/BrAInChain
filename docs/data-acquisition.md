@@ -1,45 +1,45 @@
-# Data Acquisition V1
+# Aquisição de Dados V1
 
 ## CoinMarketCap
 
-The collector uses `GET /v3/cryptocurrency/listings/latest`. CMC documents this as the current listings endpoint for active cryptocurrencies. The collector can use `CMC_API_KEY` when available; without a key it falls back to CMC's documented no-key trial endpoint.
+O coletor utiliza `GET /v3/cryptocurrency/listings/latest`. A CMC documenta esse endpoint como a rota atual de listagens de criptomoedas ativas. O coletor utiliza `CMC_API_KEY` quando disponível; sem uma chave, utiliza o endpoint de avaliação sem chave documentado pela CMC.
 
-The first snapshot schema intentionally captures the fields needed for future feature engineering:
+O primeiro esquema de snapshot captura intencionalmente os campos necessários para a futura engenharia de características:
 
-- stable CMC ID
-- name/symbol/slug
-- date added
-- capture timestamp
-- CMC rank
-- price and market cap
-- 24h volume
-- 1h/24h/7d percentage changes
-- supply metrics
-- number of market pairs
-- original raw CMC record
+- ID estável da CMC
+- nome/símbolo/slug
+- data de inclusão
+- instante da captura
+- ranking CMC
+- preço e capitalização de mercado
+- volume de 24h
+- variações percentuais de 1h/24h/7d
+- métricas de oferta
+- quantidade de pares de mercado
+- registro bruto original da CMC
 
-The raw record is preserved because future features may require fields that are not yet modeled explicitly.
+O registro bruto é preservado porque características futuras podem exigir campos que ainda não foram modelados explicitamente.
 
 ## Firebase
 
-Firebase Realtime Database is an optional persistence target for the acquisition layer. Credentials are injected through environment variables or GitHub Actions secrets. No service-account JSON is committed to the repository.
+O Firebase Realtime Database é o destino de persistência da camada de aquisição. As credenciais são fornecidas por variáveis de ambiente ou secrets do GitHub Actions. Nenhum JSON de Service Account é armazenado no repositório.
 
-Snapshots are written under:
+Os snapshots são gravados em:
 
 ```text
-snapshots/<coinmarketcap-id>/<captured-timestamp>
+snapshots/<id-da-coinmarketcap>/<instante-da-captura>
 ```
 
-This preserves the temporal observation needed for later label generation and backtesting.
+Isso preserva a observação temporal necessária para a futura geração de rótulos e para o backtesting.
 
-## Manual GitHub Actions run
+## Execução manual no GitHub Actions
 
-The workflow `.github/workflows/collect-market.yml` is intentionally **manual in V1**. This prevents unexpected API consumption or database writes while credentials and retention rules are being validated.
+O workflow `.github/workflows/collect-market.yml` é intencionalmente **manual na V1**. Isso evita consumo inesperado da API ou gravações no banco enquanto validamos credenciais e regras de retenção.
 
-Required GitHub repository secrets:
+Secrets necessários no repositório GitHub:
 
-- `CMC_API_KEY` (optional while using the documented trial endpoint)
+- `CMC_API_KEY` (opcional enquanto utilizarmos o endpoint de avaliação)
 - `FIREBASE_DATABASE_URL`
 - `FIREBASE_CREDENTIALS_JSON`
 
-Once the pipeline has been validated, we can add a scheduled trigger and define collection frequency based on API quotas and the granularity needed for the model.
+Depois que o pipeline for validado, poderemos adicionar um acionamento agendado e definir a frequência de coleta de acordo com os limites da API e a granularidade necessária para o modelo.
