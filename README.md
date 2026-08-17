@@ -1,83 +1,88 @@
 # BrAInChain
 
-Crypto AI research and automation platform.
+Plataforma de pesquisa e automação de **IA para criptomoedas**.
 
-## Vision
+## Visão
 
-BrAInChain is being built as a research-first platform for discovering patterns associated with extreme cryptocurrency price movements. The system will collect historical and near-real-time market data, transform observations into features, train and validate machine-learning models, and eventually support paper trading before any real-money execution is considered.
+O BrAInChain está sendo construído como uma plataforma orientada à pesquisa para descobrir padrões associados a movimentos extremos de preço em criptomoedas. O sistema coletará dados históricos e quase em tempo real, transformará observações em características, treinará e validará modelos de Machine Learning e, futuramente, poderá suportar Paper Trading antes de qualquer execução com dinheiro real.
 
-**Important:** Version 1 is intentionally research-only. It does not place real-money trades.
+**Importante:** a V1 é exclusivamente para pesquisa. Ela não realiza operações com dinheiro real.
 
-## V1 scope
+## Escopo atual
 
-- Project architecture and documentation
-- Data ingestion interfaces
-- Normalized crypto market snapshot model
-- Feature-engineering foundation
-- Deterministic baseline scoring model
-- Backtesting/labeling foundation
-- Configuration through environment variables
-- Automated quality checks with GitHub Actions
-- Clear separation between research, prediction, risk, and execution layers
+- Arquitetura e documentação do projeto
+- Interfaces de aquisição de dados
+- Modelo normalizado de observação do mercado
+- Estrutura inicial de engenharia de características
+- Modelo de pontuação determinístico para referência
+- Base para rotulagem e backtesting
+- Configuração por variáveis de ambiente
+- Verificações automatizadas com GitHub Actions
+- Separação entre pesquisa, previsão, risco e execução
+- Coleta de dados da CoinMarketCap
+- Persistência no Firebase Realtime Database
 
-## Architecture
+## Arquitetura
 
 ```text
-Data Sources
+Fontes de dados
     |
     v
-Ingestion -> Normalization -> Storage
+Aquisição -> Normalização -> Armazenamento
                               |
                               v
-                       Feature Engineering
+                  Engenharia de características
                               |
                               v
-                       Model / Baseline
+                       Modelo / Baseline
                               |
                     +---------+---------+
                     |                   |
                     v                   v
-                Evaluation          Risk Gate
+                 Avaliação          Filtro de risco
                     |                   |
                     +---------+---------+
                               v
-                       Paper Trading
+                         Paper Trading
                               |
                               v
-                       Future Execution
+                       Execução futura
 ```
 
-## Development principles
+## Princípios de desenvolvimento
 
-1. No real-money trading in the initial versions.
-2. Historical snapshots must represent only information available at the prediction timestamp to avoid data leakage.
-3. Models are versioned and evaluated before promotion.
-4. The risk layer can veto a model recommendation.
-5. Raw data should be preserved whenever possible so features can be regenerated later.
-6. Secrets are never committed to the repository.
+1. Nenhuma operação com dinheiro real nas versões iniciais.
+2. Cada observação histórica deve representar somente informações disponíveis no instante da previsão, evitando vazamento de dados.
+3. Modelos serão versionados e avaliados antes de serem promovidos.
+4. A camada de risco poderá bloquear uma recomendação do modelo.
+5. Dados brutos devem ser preservados sempre que possível para permitir a regeneração das características.
+6. Segredos nunca são armazenados no repositório.
 
-## Planned evolution
+## Evolução planejada
 
-- [x] Repository foundation
-- [x] V1 research architecture
-- [x] Data contracts
-- [x] Baseline scoring engine
-- [x] Initial tests and CI
-- [ ] CoinMarketCap connector
-- [ ] CoinGecko connector
-- [ ] Firebase persistence
-- [ ] Historical dataset builder
-- [ ] 2x/5x/10x outcome labeling
-- [ ] Gradient-boosting model
-- [ ] Walk-forward backtesting
-- [ ] Paper trading engine
-- [ ] Model registry and promotion rules
-- [ ] Real-time monitoring
-- [ ] Exchange execution adapter
+- [x] Fundação do repositório
+- [x] Arquitetura inicial de pesquisa
+- [x] Contratos de dados
+- [x] Modelo de pontuação de referência
+- [x] Testes iniciais e CI
+- [x] Cliente de aquisição da CoinMarketCap
+- [x] Normalização dos snapshots
+- [x] Adaptador de persistência Firebase
+- [x] Workflow manual de coleta no GitHub Actions
+- [ ] Coleta agendada do mercado
+- [ ] Conector CoinGecko
+- [ ] Construtor do dataset histórico
+- [ ] Rotulagem de resultados 2x/5x/10x
+- [ ] Modelo de Gradient Boosting
+- [ ] Backtesting walk-forward
+- [ ] Paper Trading
+- [ ] Registro e regras de promoção de modelos
+- [ ] Monitoramento em tempo real
+- [ ] Adaptador de execução em corretora/exchange
 
-## Local development
+## Desenvolvimento local
 
-The first version uses Python for the research/ML layer. A frontend and Firebase integration will be added as the data and model APIs stabilize.
+A camada de pesquisa e Machine Learning utiliza Python. A coleta da CoinMarketCap e a persistência no Firebase são implementadas como adaptadores independentes, permitindo adicionar novas fontes de dados e outros mecanismos de armazenamento sem acoplar o modelo a uma API específica.
 
 ```bash
 python -m venv .venv
@@ -88,3 +93,5 @@ python -m venv .venv
 pip install -r requirements.txt
 pytest
 ```
+
+Para configurar a aquisição, copie `.env.example` para `.env` e informe a URL do Firebase e o JSON da Service Account quando a persistência for necessária. Nunca faça commit de credenciais reais.
