@@ -40,9 +40,6 @@ class CMCConfig:
     def resolved_base_url(self) -> str:
         if self.base_url:
             return self.base_url.rstrip("/")
-        # Keep local development possible without putting an API secret in code.
-        # A configured key uses the normal production API; otherwise use CMC's
-        # documented no-key trial endpoint.
         return (CMC_BASE_URL if self.api_key else CMC_TRIAL_BASE_URL).rstrip("/")
 
 
@@ -81,9 +78,30 @@ class CoinMarketCapClient:
         return payload
 
 
+def _usd_quote(record: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Return the USD quote from CMC's current response shape.
+
+    CMC V3 returns ``quote`` as a list of currency quote objects. Older
+    integrations may still provide the legacy mapping shape ``quote.USD``.
+    Supporting both keeps normalization backwards-compatible.
+    """
+    quote = record.get("quote")
+
+    if isinstance(quote, Mapping):
+        usd = quote.get("USD", {})
+        return usd if isinstance(usd, Mapping) else {}
+
+    if isinstance(quote, list):
+        for item in quote:
+            if isinstance(item, Mapping) and str(item.get("symbol", "")).upper() == "USD":
+                return item
+
+    return {}
+
+
 def normalize_listing(record: Mapping[str, Any], *, captured_at: datetime | None = None) -> dict[str, Any]:
     """Convert a CMC listing into a stable, storage-friendly snapshot."""
-    quote = record.get("quote", {}).get("USD", {})
+    quote = _usd_quote(record)
     captured = captured_at or datetime.now(timezone.utc)
 
     return {
@@ -111,5 +129,9 @@ def normalize_listing(record: Mapping[str, Any], *, captured_at: datetime | None
 
 def normalize_listings(payload: Mapping[str, Any], *, captured_at: datetime | None = None) -> list[dict[str, Any]]:
     """Normalize all listings from one CMC response using one capture timestamp."""
+    data = payload.get("data")
+    if not isinstance(data, list):
+        raise DataAcquisitionError("CoinMarketCap response data must be a list")
+
     captured = captured_at or datetime.now(timezone.utc)
-    return [normalize_listing(item, captured_at=captured) for item in payload["data"]]
+    return [normalize_listing(item, captured_at=captured) for item in data]
