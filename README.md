@@ -63,9 +63,12 @@ Ingestion -> Normalization -> Storage
 - [x] Data contracts
 - [x] Baseline scoring engine
 - [x] Initial tests and CI
-- [ ] CoinMarketCap connector
+- [x] CoinMarketCap acquisition client
+- [x] Snapshot normalization
+- [x] Firebase persistence adapter
+- [x] Manual GitHub Actions collection workflow
+- [ ] Scheduled market collection
 - [ ] CoinGecko connector
-- [ ] Firebase persistence
 - [ ] Historical dataset builder
 - [ ] 2x/5x/10x outcome labeling
 - [ ] Gradient-boosting model
@@ -77,7 +80,7 @@ Ingestion -> Normalization -> Storage
 
 ## Local development
 
-The first version uses Python for the research/ML layer. A frontend and Firebase integration will be added as the data and model APIs stabilize.
+The research/ML layer uses Python. CoinMarketCap collection and Firebase persistence are implemented as independent adapters so additional data sources and storage backends can be added without coupling the model to an API.
 
 ```bash
 python -m venv .venv
@@ -88,3 +91,5 @@ python -m venv .venv
 pip install -r requirements.txt
 pytest
 ```
+
+For acquisition configuration, copy `.env.example` to `.env` and provide the Firebase database URL and service-account JSON when persistence is required. Never commit real credentials.
