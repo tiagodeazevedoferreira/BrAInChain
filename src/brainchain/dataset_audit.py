@@ -1,7 +1,6 @@
 """Descriptive audit for the historical Firebase training dataset."""
 from __future__ import annotations
 
-from collections import Counter
 from datetime import datetime
 from typing import Any, Iterable, Mapping
 
@@ -14,6 +13,16 @@ def _parse_ts(value: Any) -> datetime | None:
         return datetime.fromisoformat(text)
     except ValueError:
         return None
+
+
+def _positive_price(row: Mapping[str, Any]) -> bool:
+    for key in ("price_usd", "price"):
+        try:
+            if float(row.get(key)) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
 
 
 def audit_rows(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
@@ -29,11 +38,8 @@ def audit_rows(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             invalid_timestamps += 1
             continue
         by_asset.setdefault(asset, []).append(ts)
-        try:
-            if float(row.get("price")) > 0:
-                prices += 1
-        except (TypeError, ValueError):
-            pass
+        if _positive_price(row):
+            prices += 1
 
     intervals_hours: list[float] = []
     observations_per_asset: dict[str, int] = {}
