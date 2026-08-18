@@ -83,20 +83,26 @@ def _usd_quote(record: Mapping[str, Any]) -> Mapping[str, Any]:
 
     CMC V3 returns ``quote`` as a list of currency quote objects. Older
     integrations may still provide the legacy mapping shape ``quote.USD``.
-    Supporting both keeps normalization backwards-compatible.
+    Invalid quote shapes are rejected rather than silently converted to an
+    empty quote, preventing corrupt snapshots from entering the dataset.
     """
     quote = record.get("quote")
 
     if isinstance(quote, Mapping):
-        usd = quote.get("USD", {})
-        return usd if isinstance(usd, Mapping) else {}
+        usd = quote.get("USD")
+        if usd is None:
+            raise ValueError("listing quote mapping does not contain USD")
+        if not isinstance(usd, Mapping):
+            raise ValueError("listing USD quote must be a mapping")
+        return usd
 
     if isinstance(quote, list):
         for item in quote:
             if isinstance(item, Mapping) and str(item.get("symbol", "")).upper() == "USD":
                 return item
+        raise ValueError("listing quote list does not contain USD")
 
-    return {}
+    raise ValueError("listing quote must be a mapping or list")
 
 
 def normalize_listing(record: Mapping[str, Any], *, captured_at: datetime | None = None) -> dict[str, Any]:
