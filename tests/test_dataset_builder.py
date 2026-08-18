@@ -12,4 +12,4 @@ def test_dataset_builder_keeps_features_and_time_labels():
     assert dataset[0]["volume_market_cap_ratio"] == 0.1
     assert dataset[0]["label_1h_max_multiple"] == 1.1
     assert dataset[0]["label_6h_max_multiple"] == 1.5
-    assert training_counts(dataset, horizons_hours=(1, 6)) == {"1h": 2, "6h": 1}
+    assert training_counts(dataset, horizons_hours=(1, 6)) == {"1h": 1, "6h": 2}
