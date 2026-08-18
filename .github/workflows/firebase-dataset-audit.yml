@@ -1,0 +1,28 @@
+name: Firebase Dataset Audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_assets:
+        description: "Optional limit of assets to audit (0 = all)"
+        required: false
+        default: "0"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Audit real Firebase dataset
+        env:
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+        run: python scripts/audit_firebase_dataset.py --max-assets "${{ inputs.max_assets }}"
