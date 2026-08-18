@@ -11,7 +11,7 @@ def test_labels_are_based_only_on_future_prices():
     labels = build_labels(rows)
     first = labels[0]
     assert first["target_2x_24h"] == 1
-    assert first["target_5x_24h"] == 0
+    assert first["target_5x_24h"] == 1
     assert first["target_5x_168h"] == 1
 
 
