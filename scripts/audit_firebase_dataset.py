@@ -8,9 +8,9 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from brainchain.firebase_training_data import build_training_rows
 from brainchain.dataset_audit import audit_rows
 from brainchain.firebase_reader import FirebaseReader
+from brainchain.firebase_training_data import build_training_rows
 
 
 def main() -> int:
@@ -22,7 +22,7 @@ def main() -> int:
         database_url=os.environ["FIREBASE_DATABASE_URL"],
         credentials_json=os.environ["FIREBASE_CREDENTIALS_JSON"],
     )
-    raw = reader.read_snapshots()
+    raw = reader.read("/snapshots") or {}
     rows = build_training_rows(raw)
     if args.max_assets:
         assets = sorted({str(r.get("source_id")) for r in rows})[: args.max_assets]
