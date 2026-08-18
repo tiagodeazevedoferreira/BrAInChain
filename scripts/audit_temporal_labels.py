@@ -1,0 +1,17 @@
+from __future__ import annotations
+import argparse, json
+from brainchain.firebase_reader import FirebaseReader
+from brainchain.temporal_audit import audit_temporal_coverage
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--max-assets", type=int, default=0)
+    args = parser.parse_args()
+    rows = FirebaseReader().read_snapshots()
+    if args.max_assets > 0:
+        rows = rows[: args.max_assets]
+    print(json.dumps(audit_temporal_coverage(rows), sort_keys=True))
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
