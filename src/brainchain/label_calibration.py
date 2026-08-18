@@ -3,29 +3,21 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping
 
-
-def _price(row: Mapping[str, Any]) -> float | None:
-    value = row.get("price")
-    try:
-        value = float(value)
-    except (TypeError, ValueError):
-        return None
-    return value if value > 0 else None
+from .labels import build_time_labels
 
 
 def calibrate_1h(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
-    # Rows are expected to already contain the supervised 1h future price when available.
-    returns = []
-    for row in rows:
-        current = _price(row)
-        future = row.get("future_price_1h")
-        try:
-            future = float(future)
-        except (TypeError, ValueError):
-            continue
-        if current and future > 0:
-            returns.append(future / current - 1.0)
+    """Measure the observed 1h max-return distribution from raw snapshots.
 
+    The future value is derived point-in-time from snapshots of the same asset;
+    callers do not need to materialize a ``future_price_1h`` field.
+    """
+    labels = build_time_labels(rows, horizons_hours=(1,))
+    returns = [
+        float(row["label_1h_max_return"])
+        for row in labels
+        if row.get("label_1h_max_return") is not None
+    ]
     returns.sort()
 
     def pct(p: float) -> float | None:
