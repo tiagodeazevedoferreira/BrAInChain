@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
+from unittest.mock import Mock
 
 import pytest
+import requests
 
 from brainchain.data_acquisition import CMCConfig, CoinMarketCapClient, DataAcquisitionError, normalize_listing, normalize_listings
 
@@ -9,10 +11,11 @@ class FakeResponse:
     def __init__(self, payload, status_code=200):
         self._payload = payload
         self.status_code = status_code
+        self.headers = {}
 
     def raise_for_status(self):
         if self.status_code >= 400:
-            raise RuntimeError("HTTP error")
+            raise requests.HTTPError(f"HTTP {self.status_code}")
 
     def json(self):
         return self._payload
@@ -105,3 +108,38 @@ def test_client_rejects_invalid_response_shape():
     client = CoinMarketCapClient(session=FakeSession(FakeResponse({"status": {}})))
     with pytest.raises(DataAcquisitionError):
         client.listings_latest()
+
+
+def test_client_retries_429_and_succeeds(monkeypatch):
+    rate_limited = Mock(status_code=429, headers={"Retry-After": "0"})
+    successful = Mock(status_code=200, headers={})
+    successful.json.return_value = {"data": [{"id": 1}]}
+    session = Mock()
+    session.get.side_effect = [rate_limited, successful]
+    monkeypatch.setattr("brainchain.data_acquisition.time.sleep", Mock())
+
+    client = CoinMarketCapClient(CMCConfig(max_retries=1, backoff_seconds=0), session=session)
+    assert client.listings_latest(limit=1) == {"data": [{"id": 1}]}
+    assert session.get.call_count == 2
+
+
+def test_client_raises_after_429_retries(monkeypatch):
+    rate_limited = Mock(status_code=429, headers={})
+    session = Mock()
+    session.get.return_value = rate_limited
+    monkeypatch.setattr("brainchain.data_acquisition.time.sleep", Mock())
+
+    client = CoinMarketCapClient(CMCConfig(max_retries=1, backoff_seconds=0), session=session)
+    with pytest.raises(DataAcquisitionError, match="HTTP 429"):
+        client.listings_latest(limit=1)
+
+
+def test_client_retries_network_error(monkeypatch):
+    successful = Mock(status_code=200, headers={})
+    successful.json.return_value = {"data": []}
+    session = Mock()
+    session.get.side_effect = [requests.ConnectionError("temporary"), successful]
+    monkeypatch.setattr("brainchain.data_acquisition.time.sleep", Mock())
+
+    client = CoinMarketCapClient(CMCConfig(max_retries=1, backoff_seconds=0), session=session)
+    assert client.listings_latest(limit=1) == {"data": []}
