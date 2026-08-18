@@ -5,19 +5,36 @@ from typing import Any, Iterable, Mapping
 
 
 def flatten_snapshots(payload: Mapping[str, Any] | Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Flatten common Firebase Realtime Database snapshot shapes."""
-    if isinstance(payload, Mapping):
-        values = payload.values()
-    else:
-        values = payload
+    """Flatten flat and nested Firebase Realtime Database snapshot shapes.
+
+    The production store uses ``snapshots/<asset>/<timestamp>``. The adapter
+    also accepts the earlier flat ``{key: snapshot}`` representation.
+    """
     rows: list[dict[str, Any]] = []
-    for item in values:
+    if not isinstance(payload, Mapping):
+        for item in payload:
+            if isinstance(item, Mapping):
+                row = dict(item)
+                if row.get("source_id") is None and row.get("id") is not None:
+                    row["source_id"] = row["id"]
+                rows.append(row)
+        return rows
+
+    for key, item in payload.items():
         if not isinstance(item, Mapping):
             continue
-        row = dict(item)
-        if row.get("source_id") is None and row.get("id") is not None:
-            row["source_id"] = row["id"]
-        rows.append(row)
+        # Production shape: {asset: {timestamp: snapshot}}
+        if item and all(isinstance(v, Mapping) for v in item.values()):
+            for timestamp_key, snapshot in item.items():
+                row = dict(snapshot)
+                row.setdefault("source_id", key)
+                row.setdefault("captured_at", timestamp_key.replace("_", "."))
+                rows.append(row)
+        else:
+            row = dict(item)
+            if row.get("source_id") is None and row.get("id") is not None:
+                row["source_id"] = row["id"]
+            rows.append(row)
     return rows
 
 

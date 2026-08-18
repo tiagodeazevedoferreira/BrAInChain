@@ -7,6 +7,19 @@ def test_flatten_supports_firebase_map_shape():
     assert rows[0]["source_id"] == "BTC"
 
 
+def test_flatten_supports_production_nested_history_shape():
+    payload = {
+        "BTC": {
+            "2026-01-01T00:00:00+00_00": {"price": 1.0},
+            "2026-01-02T00:00:00+00_00": {"price": 2.0},
+        }
+    }
+    rows = flatten_snapshots(payload)
+    assert len(rows) == 2
+    assert {r["source_id"] for r in rows} == {"BTC"}
+    assert rows[0]["captured_at"] == "2026-01-01T00:00:00+00.00"
+
+
 def test_prepare_dataset_is_deterministic():
     payload = [
         {"source_id": "ETH", "captured_at": "2026-01-02T00:00:00+00:00"},
