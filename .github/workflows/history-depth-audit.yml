@@ -1,0 +1,41 @@
+name: Asset History Depth Audit
+
+on:
+  pull_request:
+    paths:
+      - "src/brainchain/history_depth.py"
+      - "scripts/audit_history_depth.py"
+      - "tests/test_history_depth.py"
+  workflow_dispatch:
+    inputs:
+      max_assets:
+        description: "Maximum number of rows to audit (0 = all)"
+        required: false
+        default: "0"
+        type: string
+
+jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e . && pip install "pytest<9,>=8"
+      - run: PYTHONPATH=src pytest -q tests/test_history_depth.py
+  audit:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e .
+      - name: Audit Firebase history depth
+        env:
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+        run: PYTHONPATH=src python scripts/audit_history_depth.py --max-assets "${{ inputs.max_assets }}"
