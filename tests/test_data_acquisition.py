@@ -44,6 +44,14 @@ def sample_record():
     }
 
 
+def sample_record_list_quote():
+    record = sample_record()
+    record["quote"] = [
+        {"symbol": "USD", "price": 0.00031, "market_cap": 310, "volume_24h": 100, "percent_change_1h": 5, "percent_change_24h": 25, "percent_change_7d": 80}
+    ]
+    return record
+
+
 def test_normalize_listing_creates_stable_snapshot():
     captured = datetime(2026, 8, 17, tzinfo=timezone.utc)
     snapshot = normalize_listing(sample_record(), captured_at=captured)
@@ -52,6 +60,21 @@ def test_normalize_listing_creates_stable_snapshot():
     assert snapshot["price_usd"] == 0.00031
     assert snapshot["captured_at"] == "2026-08-17T00:00:00+00:00"
     assert snapshot["raw"]["symbol"] == "EXM"
+
+
+def test_normalize_listing_accepts_current_list_quote_shape():
+    captured = datetime(2026, 8, 17, tzinfo=timezone.utc)
+    snapshot = normalize_listing(sample_record_list_quote(), captured_at=captured)
+    assert snapshot["price_usd"] == 0.00031
+    assert snapshot["market_cap_usd"] == 310
+    assert snapshot["percent_change_24h"] == 25
+
+
+def test_normalize_listing_rejects_invalid_quote_shape():
+    record = sample_record()
+    record["quote"] = "invalid"
+    with pytest.raises(ValueError):
+        normalize_listing(record)
 
 
 def test_normalize_listings_uses_one_capture_timestamp():
