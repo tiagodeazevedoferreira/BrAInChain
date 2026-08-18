@@ -3,11 +3,17 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
+from datetime import datetime, timedelta
 
 from brainchain.firebase_reader import FirebaseReader
-from brainchain.label_engine import build_time_labels
 
 THRESHOLDS = (0.0025, 0.005, 0.0075, 0.01, 0.0125, 0.015, 0.02)
+
+
+def _time(value: object) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
 
 
 def main() -> int:
@@ -16,18 +22,31 @@ def main() -> int:
     args = parser.parse_args()
 
     rows = FirebaseReader().read_snapshots()
-    if args.max_assets:
-        rows = rows[: args.max_assets]
+    groups: dict[str, list[dict]] = {}
+    for row in rows:
+        if row.get("source_id") is None or row.get("price_usd") is None or row.get("captured_at") is None:
+            continue
+        item = dict(row)
+        item["_time"] = _time(row["captured_at"])
+        item["_price"] = float(row["price_usd"])
+        groups.setdefault(str(row["source_id"]), []).append(item)
 
-    labeled = build_time_labels(rows, horizons_hours=(1,))
+    returns: list[float] = []
+    for asset_rows in groups.values():
+        asset_rows.sort(key=lambda r: r["_time"])
+        for i, current in enumerate(asset_rows):
+            end = current["_time"] + timedelta(hours=1)
+            future = [r for r in asset_rows[i + 1 :] if r["_time"] <= end]
+            if not future:
+                continue
+            if future[-1]["_time"] - current["_time"] < timedelta(minutes=45):
+                continue
+            returns.append(future[-1]["_price"] / current["_price"] - 1.0)
+
     results = {}
     for threshold in THRESHOLDS:
         counts = Counter()
-        for row in labeled:
-            value = row.get("return_1h")
-            if value is None:
-                continue
-            value = float(value)
+        for value in returns:
             if value >= threshold:
                 counts["up"] += 1
             elif value <= -threshold:
