@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from brainchain.firebase_reader import FirebaseReader
 
-THRESHOLDS = (0.0025, 0.005, 0.0075, 0.01, 0.0125, 0.015, 0.02)
+THRESHOLDS = (0.0005, 0.001, 0.0015, 0.002, 0.0025, 0.003, 0.0035, 0.004)
 
 
 def _time(value: object) -> datetime:
