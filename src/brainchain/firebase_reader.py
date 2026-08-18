@@ -34,3 +34,10 @@ class FirebaseReader:
     def read(self, path: str = "/") -> Any:
         """Read a Firebase Realtime Database path using service-account auth."""
         return db.reference(path).get()
+
+    def read_snapshots(self) -> list[dict[str, Any]]:
+        """Read and normalize the historical snapshot dataset."""
+        from brainchain.firebase_training_data import build_training_rows
+
+        payload = self.read("/snapshots") or {}
+        return build_training_rows(payload)
