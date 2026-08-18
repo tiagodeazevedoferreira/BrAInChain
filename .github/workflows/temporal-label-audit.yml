@@ -24,6 +24,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -e .
+      - run: pip install "pytest<9,>=8"
       - run: PYTHONPATH=src pytest -q tests/test_temporal_audit.py
   audit:
     if: github.event_name == 'workflow_dispatch'
