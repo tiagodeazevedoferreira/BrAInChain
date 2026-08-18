@@ -7,6 +7,7 @@ same collector can feed Firebase, local files, tests, or another backend.
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping
@@ -27,6 +28,8 @@ class CMCConfig:
     api_key: str | None = None
     base_url: str | None = None
     timeout_seconds: float = 15.0
+    max_retries: int = 4
+    backoff_seconds: float = 2.0
 
     @classmethod
     def from_environment(cls) -> "CMCConfig":
@@ -34,6 +37,8 @@ class CMCConfig:
             api_key=os.getenv("CMC_API_KEY"),
             base_url=os.getenv("CMC_BASE_URL"),
             timeout_seconds=float(os.getenv("CMC_TIMEOUT_SECONDS", "15")),
+            max_retries=int(os.getenv("CMC_MAX_RETRIES", "4")),
+            backoff_seconds=float(os.getenv("CMC_BACKOFF_SECONDS", "2")),
         )
 
     @property
@@ -55,27 +60,54 @@ class CoinMarketCapClient:
             raise ValueError("limit must be between 1 and 5000")
         if start < 1:
             raise ValueError("start must be >= 1")
+        if self.config.max_retries < 0:
+            raise ValueError("max_retries must be >= 0")
 
         headers = {"Accept": "application/json"}
         if self.config.api_key:
             headers["X-CMC_PRO_API_KEY"] = self.config.api_key
 
         url = f"{self.config.resolved_base_url}/v3/cryptocurrency/listings/latest"
-        try:
-            response = self.session.get(
-                url,
-                params={"start": start, "limit": limit, "convert": convert},
-                headers=headers,
-                timeout=self.config.timeout_seconds,
-            )
-            response.raise_for_status()
-            payload = response.json()
-        except (requests.RequestException, ValueError) as exc:
-            raise DataAcquisitionError(f"CoinMarketCap request failed: {exc}") from exc
+        attempts = self.config.max_retries + 1
 
-        if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
-            raise DataAcquisitionError("CoinMarketCap returned an unexpected response shape")
-        return payload
+        for attempt in range(attempts):
+            try:
+                response = self.session.get(
+                    url,
+                    params={"start": start, "limit": limit, "convert": convert},
+                    headers=headers,
+                    timeout=self.config.timeout_seconds,
+                )
+            except requests.RequestException as exc:
+                if attempt >= self.config.max_retries:
+                    raise DataAcquisitionError(f"CoinMarketCap request failed: {exc}") from exc
+                time.sleep(self.config.backoff_seconds * (2**attempt))
+                continue
+
+            if response.status_code == 429:
+                if attempt >= self.config.max_retries:
+                    raise DataAcquisitionError(
+                        f"CoinMarketCap rate limit exceeded after {attempts} attempts (HTTP 429)"
+                    )
+                retry_after = response.headers.get("Retry-After")
+                try:
+                    delay = float(retry_after) if retry_after is not None else self.config.backoff_seconds * (2**attempt)
+                except ValueError:
+                    delay = self.config.backoff_seconds * (2**attempt)
+                time.sleep(max(0.0, delay))
+                continue
+
+            try:
+                response.raise_for_status()
+                payload = response.json()
+            except (requests.RequestException, ValueError) as exc:
+                raise DataAcquisitionError(f"CoinMarketCap request failed: {exc}") from exc
+
+            if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+                raise DataAcquisitionError("CoinMarketCap returned an unexpected response shape")
+            return payload
+
+        raise DataAcquisitionError("CoinMarketCap request failed unexpectedly")
 
 
 def _usd_quote(record: Mapping[str, Any]) -> Mapping[str, Any]:
