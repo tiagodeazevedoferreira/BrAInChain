@@ -1,0 +1,39 @@
+name: 1h Label Distribution Audit
+
+on:
+  pull_request:
+    paths:
+      - "scripts/audit_1h_label_distribution_v1.py"
+  workflow_dispatch:
+    inputs:
+      max_assets:
+        description: "Maximum rows to audit (0 = all)"
+        required: false
+        default: "0"
+        type: string
+
+jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e .
+      - run: python -m py_compile scripts/audit_1h_label_distribution_v1.py
+  audit:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e .
+      - name: Audit 1h label distribution
+        env:
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+        run: PYTHONPATH=src python scripts/audit_1h_label_distribution_v1.py --max-assets "${{ inputs.max_assets }}"
