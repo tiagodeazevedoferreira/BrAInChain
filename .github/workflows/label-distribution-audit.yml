@@ -1,0 +1,25 @@
+name: Label Distribution Audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_assets:
+        description: "Maximum number of snapshot rows to audit (0 = all)"
+        required: false
+        default: "0"
+        type: string
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e .
+      - name: Audit label distribution
+        env:
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+        run: PYTHONPATH=src python scripts/audit_label_distribution.py --max-assets "${{ inputs.max_assets }}"
