@@ -1,8 +1,8 @@
 """Firebase Realtime Database persistence adapter.
 
 Credentials are supplied through environment variables and are never stored in
-Git. The adapter is optional at test time so the acquisition pipeline can be
-validated without a Firebase project.
+Git. Snapshots are immutable historical observations, while ``latest`` keeps a
+cheap point-in-time view for downstream feature engineering.
 """
 
 from __future__ import annotations
@@ -44,10 +44,13 @@ class FirebaseStore:
             raise FirebaseStoreError(f"Firebase initialization failed: {exc}") from exc
 
     def write_snapshots(self, snapshots: Iterable[Mapping[str, Any]]) -> int:
-        """Write immutable snapshots below snapshots/<asset>/<timestamp>.
+        """Persist immutable history and update the latest view for each asset.
 
-        A deterministic timestamp key is used to make repeated executions
-        idempotent for the same captured snapshot.
+        Historical observations live at ``snapshots/<asset>/<timestamp>`` and
+        are never overwritten by a later collection. ``latest/<asset>`` is a
+        convenience index containing the most recent observation seen by this
+        process. The timestamp key is deterministic, so retrying the same
+        captured snapshot is idempotent.
         """
         self.initialize()
         count = 0
@@ -60,7 +63,11 @@ class FirebaseStore:
             # Firebase keys cannot contain '.', '#', '$', '[', or ']'. ISO 8601
             # contains ':' which is safe, but replace '.' for a compact key.
             timestamp_key = str(captured_at).replace(".", "_")
-            path = f"snapshots/{source_id}/{timestamp_key}"
-            self._db.reference(path).set(dict(snapshot))
+            snapshot_data = dict(snapshot)
+            history_path = f"snapshots/{source_id}/{timestamp_key}"
+            latest_path = f"latest/{source_id}"
+
+            self._db.reference(history_path).set(snapshot_data)
+            self._db.reference(latest_path).set(snapshot_data)
             count += 1
         return count
