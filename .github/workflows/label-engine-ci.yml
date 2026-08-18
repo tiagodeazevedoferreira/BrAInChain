@@ -1,0 +1,19 @@
+name: Label Engine CI
+
+on:
+  pull_request:
+    paths:
+      - "src/brainchain/labels.py"
+      - "tests/test_labels.py"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: PYTHONPATH=src pytest -q tests/test_labels.py
