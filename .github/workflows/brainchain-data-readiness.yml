@@ -1,0 +1,130 @@
+name: BrAInChain Data Readiness Orchestrator
+
+on:
+  schedule:
+    - cron: "47 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+concurrency:
+  group: brainchain-data-readiness
+  cancel-in-progress: true
+
+jobs:
+  assess-and-advance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Assess Firebase readiness and advance routine audits
+        env:
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p .readiness
+
+          PYTHONPATH=src python scripts/audit_firebase_dataset.py --max-assets 0 > .readiness/firebase.json
+          PYTHONPATH=src python scripts/audit_history_depth.py --max-assets 0 > .readiness/history.json
+          PYTHONPATH=src python scripts/audit_readiness.py --max-assets 0 > .readiness/readiness.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          history = json.loads(Path('.readiness/history.json').read_text())
+          readiness = json.loads(Path('.readiness/readiness.json').read_text())
+          assets = max(1, int(readiness.get('assets', 0)))
+          coverage_target = 0.90
+
+          horizons = (1, 6, 24, 72, 168)
+          ready = []
+          for h in horizons:
+              count = int(readiness['horizons'][f'{h}h']['assets_with_history'])
+              if count / assets >= coverage_target:
+                  ready.append(h)
+
+          state = {
+              'assets': assets,
+              'coverage_target': coverage_target,
+              'ready_horizons': ready,
+              'max_history_hours': history.get('history_hours', {}).get('max'),
+              'latest_observation': readiness.get('latest_observation'),
+          }
+          Path('.readiness/state.json').write_text(json.dumps(state, indent=2, sort_keys=True))
+          print(json.dumps(state, sort_keys=True))
+          PY
+
+          # Every readiness run refreshes the aggregate Firebase audit through
+          # its existing workflow. The orchestrator, not the maintainer, owns
+          # the dispatch button now.
+          gh workflow run firebase-dataset-audit.yml -f max_assets=0
+
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          state = json.loads(Path('.readiness/state.json').read_text())
+          repo = subprocess.check_output(['gh', 'repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'], text=True).strip()
+
+          def existing(title):
+              out = subprocess.check_output([
+                  'gh', 'issue', 'list', '--repo', repo, '--state', 'all', '--limit', '20',
+                  '--search', f'in:title "{title}"'
+              ], text=True)
+              return bool(out.strip())
+
+          def create_issue(title, body):
+              subprocess.run([
+                  'gh', 'issue', 'create', '--repo', repo, '--title', title,
+                  '--body', body, '--label', 'automation', '--label', 'data-readiness'
+              ], check=True)
+
+          for horizon in state['ready_horizons']:
+              title = f'[Data Readiness] Horizon {horizon}h ready'
+              if existing(title):
+                  continue
+
+              body = (
+                  f"The data-readiness orchestrator detected {horizon}h readiness "
+                  f"for at least {state['coverage_target']:.0%} of current assets.\n\n"
+                  f"- Assets: {state['assets']}\n"
+                  f"- Max history: {state['max_history_hours']}h\n"
+                  f"- Latest observation: {state['latest_observation']}\n"
+              )
+
+              # Dispatch only the audits that already exist. Never invent a
+              # workflow for a later horizon.
+              workflows = ['history-depth-audit.yml', 'temporal-label-audit.yml']
+              if horizon == 1:
+                  workflows += ['1h-label-distribution-audit.yml', '1h-threshold-calibration-v2.yml']
+
+              for workflow in workflows:
+                  subprocess.run(['gh', 'workflow', 'run', workflow, '-f', 'max_assets=0'], check=True)
+
+              create_issue(title, body)
+          PY
+
+      - name: Upload readiness evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: brainchain-readiness-${{ github.run_id }}
+          path: .readiness/
+          retention-days: 14
