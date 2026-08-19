@@ -1,0 +1,55 @@
+name: PR CI Guardian
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  guard:
+    if: ${{ github.event.workflow_run.event == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recover or escalate CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          conclusion='${{ github.event.workflow_run.conclusion }}'
+          if [ "$conclusion" = "success" ]; then
+            exit 0
+          fi
+          if [ "$conclusion" != "failure" ]; then
+            exit 0
+          fi
+
+          if [ "$ATTEMPT" = "1" ]; then
+            gh run rerun "$RUN_ID" --failed --repo "$REPOSITORY"
+            exit 0
+          fi
+
+          title="[PR CI] Human action required"
+          body=$(cat <<EOF
+CI failed twice for a pull request and automatic recovery has been exhausted.
+
+- Branch: ${BRANCH}
+- Run: ${RUN_URL}
+- Run ID: ${RUN_ID}
+
+The guardian intentionally does not modify application code or merge the pull request automatically. Investigation is required.
+EOF
+          )
+          if ! gh issue list --repo "$REPOSITORY" --state open --limit 50 --search "in:title \"$title\"" | grep -q .; then
+            gh issue create --repo "$REPOSITORY" --title "$title" --body "$body" --label "automation"
+          fi
