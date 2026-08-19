@@ -34,14 +34,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          TRIGGER_WORKFLOW: ${{ github.event.workflow_run.name }}
+          TRIGGER_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           set -euo pipefail
 
-          # The control plane is intentionally deterministic. It does not edit
-          # source code, secrets, collection cadence, thresholds, or data.
-          # It only routes already-authorized workflows and creates an issue
-          # when a human decision is genuinely required.
-
+          # Deterministic control plane: no source-code, secret, cadence,
+          # threshold, or destructive-data changes are permitted here.
           recent_failures=$(gh run list --repo "$REPOSITORY" --limit 50 --json name,conclusion,status,url \
             --jq '[.[] | select(.conclusion == "failure")] | length')
 
@@ -59,10 +59,11 @@ EOF
             fi
           fi
 
-          # Ensure readiness is retriggerable from the control plane if a
-          # collection completed successfully but the downstream workflow did
-          # not start. The workflow itself is idempotent and performs its own
-          # horizon/state checks.
-          if gh run list --repo "$REPOSITORY" --workflow "Collect Crypto Market" --status success --limit 1 --json databaseId,conclusion | grep -q 'databaseId'; then
-            gh workflow run "brainchain-data-readiness.yml" --repo "$REPOSITORY" 2>/dev/null || true
+          # The readiness workflow is primarily chained directly from a
+          # successful collection. This control-plane fallback is intentionally
+          # limited to that event, avoiding repeated hourly dispatches.
+          if [ "$EVENT_NAME" = "workflow_run" ] && \
+             [ "$TRIGGER_WORKFLOW" = "Collect Crypto Market" ] && \
+             [ "$TRIGGER_CONCLUSION" = "success" ]; then
+            gh workflow run "brainchain-data-readiness.yml" --repo "$REPOSITORY"
           fi
