@@ -1,0 +1,49 @@
+name: CI Auto-Recovery
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  actions: write
+  issues: write
+  contents: read
+
+jobs:
+  recover:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retry failed CI jobs once
+        if: ${{ github.event.workflow_run.run_attempt == 1 }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          REPOSITORY: ${{ github.repository }}
+        run: gh run rerun "$RUN_ID" --failed --repo "$REPOSITORY"
+
+      - name: Open human-action issue after retry
+        if: ${{ github.event.workflow_run.run_attempt > 1 }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+          title="[CI] Human action required after automatic retry"
+          body=$(cat <<EOF
+          The CI workflow failed twice and the automatic retry has been exhausted.
+
+          - Branch: ${HEAD_BRANCH}
+          - Run: ${RUN_URL}
+          - Run ID: ${RUN_ID}
+
+          The CI Auto-Recovery workflow intentionally stops here. A human/agent investigation is required before changing code or repeatedly rerunning CI.
+          EOF
+          )
+          if ! gh issue list --repo "$REPOSITORY" --state open --limit 20 --search "in:title \"$title\"" | grep -q .; then
+            gh issue create --repo "$REPOSITORY" --title "$title" --body "$body"
+          fi
