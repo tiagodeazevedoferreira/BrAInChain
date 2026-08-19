@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows:
       - "Firebase Dataset Audit"
-      - "History Depth Audit"
+      - "Asset History Depth Audit"
       - "Temporal Label Audit"
       - "1h Label Distribution Audit"
       - "1h Threshold Calibration v2"
