@@ -5,6 +5,10 @@ from datetime import datetime, timedelta
 from typing import Any, Iterable, Mapping
 
 
+# Human-approved promotion from the 1h threshold calibration audit.
+ONE_HOUR_RETURN_THRESHOLD = 0.0025
+
+
 def _ts(value: Any) -> datetime | None:
     if value is None:
         return None
@@ -20,6 +24,16 @@ def _price(row: Mapping[str, Any]) -> float | None:
         return float(value) if value is not None and float(value) > 0 else None
     except (TypeError, ValueError):
         return None
+
+
+def _classify_return(value: float | None) -> str | None:
+    if value is None:
+        return None
+    if value >= ONE_HOUR_RETURN_THRESHOLD:
+        return "up"
+    if value <= -ONE_HOUR_RETURN_THRESHOLD:
+        return "down"
+    return "neutral"
 
 
 def build_time_labels(rows: Iterable[Mapping[str, Any]], horizons_hours=(1, 6, 24, 72, 168)) -> list[dict[str, Any]]:
@@ -51,10 +65,13 @@ def build_time_labels(rows: Iterable[Mapping[str, Any]], horizons_hours=(1, 6, 2
                     if p is not None
                 ]
                 prefix = f"label_{hours}h"
-                out[f"{prefix}_max_return"] = (max(future_prices) / start_price - 1.0) if future_prices else None
+                max_return = (max(future_prices) / start_price - 1.0) if future_prices else None
+                out[f"{prefix}_max_return"] = max_return
                 out[f"{prefix}_max_multiple"] = (max(future_prices) / start_price) if future_prices else None
                 out[f"{prefix}_hit_2x"] = int(max(future_prices) >= start_price * 2) if future_prices else None
                 out[f"{prefix}_hit_5x"] = int(max(future_prices) >= start_price * 5) if future_prices else None
                 out[f"{prefix}_hit_10x"] = int(max(future_prices) >= start_price * 10) if future_prices else None
+                if hours == 1:
+                    out["label_1h_class"] = _classify_return(max_return)
             result.append(out)
     return result
