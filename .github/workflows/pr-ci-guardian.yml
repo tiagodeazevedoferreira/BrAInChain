@@ -6,17 +6,26 @@ on:
     types: [completed]
 
 permissions:
-  actions: read
+  actions: write
   contents: read
   issues: write
   pull-requests: write
 
 jobs:
   guard:
-    if: ${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt > 1 }}
+    if: ${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'failure' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Explain persistent CI failure on the pull request
+      - name: Retry first CI failure
+        if: ${{ github.event.workflow_run.run_attempt == 1 }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: gh run rerun "$RUN_ID" --failed --repo "$REPOSITORY"
+
+      - name: Escalate persistent CI failure
+        if: ${{ github.event.workflow_run.run_attempt > 1 }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -40,5 +49,5 @@ CI failed again after the automatic recovery attempt.
 - Run: ${RUN_URL}
 - Run ID: ${RUN_ID}
 
-Automatic reruns are exhausted. The project control plane will not modify source code or merge this PR automatically. Investigation is required."
+Automatic reruns are exhausted. Investigation is required."
           done
