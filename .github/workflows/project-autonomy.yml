@@ -30,18 +30,12 @@ jobs:
   control-plane:
     runs-on: ubuntu-latest
     steps:
-      - name: Evaluate project state and route automation
+      - name: Evaluate project state and escalate persistent failures
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          EVENT_NAME: ${{ github.event_name }}
-          TRIGGER_WORKFLOW: ${{ github.event.workflow_run.name }}
-          TRIGGER_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           set -euo pipefail
-
-          # Deterministic control plane: no source-code, secret, cadence,
-          # threshold, or destructive-data changes are permitted here.
           recent_failures=$(gh run list --repo "$REPOSITORY" --limit 50 --json name,conclusion,status,url \
             --jq '[.[] | select(.conclusion == "failure")] | length')
 
@@ -59,11 +53,5 @@ EOF
             fi
           fi
 
-          # The readiness workflow is primarily chained directly from a
-          # successful collection. This control-plane fallback is intentionally
-          # limited to that event, avoiding repeated hourly dispatches.
-          if [ "$EVENT_NAME" = "workflow_run" ] && \
-             [ "$TRIGGER_WORKFLOW" = "Collect Crypto Market" ] && \
-             [ "$TRIGGER_CONCLUSION" = "success" ]; then
-            gh workflow run "brainchain-data-readiness.yml" --repo "$REPOSITORY"
-          fi
+          # Readiness is chained directly to successful collection. This
+          # control plane intentionally does not duplicate that dispatch.
