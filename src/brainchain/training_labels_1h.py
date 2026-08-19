@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any, Iterable, Mapping
 
 ONE_HOUR_RETURN_THRESHOLD = 0.0025
+_THRESHOLD_EPSILON = 1e-12
 
 
 def _time(value: Any) -> datetime:
@@ -37,9 +38,9 @@ def build_1h_labels(snapshots: Iterable[Mapping[str, Any]]) -> list[dict[str, An
             base_price = float(current["price_usd"])
             future_price = float(future_row["price_usd"])
             change = (future_price / base_price) - 1.0
-            if change >= ONE_HOUR_RETURN_THRESHOLD:
+            if change >= ONE_HOUR_RETURN_THRESHOLD - _THRESHOLD_EPSILON:
                 label = "up"
-            elif change <= -ONE_HOUR_RETURN_THRESHOLD:
+            elif change <= -ONE_HOUR_RETURN_THRESHOLD + _THRESHOLD_EPSILON:
                 label = "down"
             else:
                 label = "neutral"
