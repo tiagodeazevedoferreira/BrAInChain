@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from brainchain.labels import ONE_HOUR_RETURN_THRESHOLD, build_time_labels
 
 
@@ -33,5 +35,5 @@ def test_temporal_window_does_not_use_observations_after_one_hour():
 
     labeled = build_time_labels(rows, horizons_hours=(1,))
     first = next(row for row in labeled if row["captured_at"] == t0)
-    assert first["label_1h_max_return"] == 0.20
+    assert first["label_1h_max_return"] == pytest.approx(0.20)
     assert first["label_1h_class"] == "up"
