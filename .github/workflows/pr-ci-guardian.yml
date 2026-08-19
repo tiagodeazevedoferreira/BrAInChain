@@ -27,10 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           conclusion='${{ github.event.workflow_run.conclusion }}'
-          if [ "$conclusion" = "success" ]; then
-            exit 0
-          fi
-          if [ "$conclusion" != "failure" ]; then
+          if [ "$conclusion" = "success" ] || [ "$conclusion" != "failure" ]; then
             exit 0
           fi
 
@@ -51,5 +48,5 @@ The guardian intentionally does not modify application code or merge the pull re
 EOF
           )
           if ! gh issue list --repo "$REPOSITORY" --state open --limit 50 --search "in:title \"$title\"" | grep -q .; then
-            gh issue create --repo "$REPOSITORY" --title "$title" --body "$body" --label "automation"
+            gh issue create --repo "$REPOSITORY" --title "$title" --body "$body"
           fi
