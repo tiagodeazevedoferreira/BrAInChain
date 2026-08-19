@@ -1,0 +1,92 @@
+name: Collection Health Monitor
+
+on:
+  schedule:
+    - cron: "27 * * * *"
+  workflow_run:
+    workflows: ["Collect Crypto Market"]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  alert-on-collection-failure:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create collection failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY}"
+          title="[Collection Health] Collect Crypto Market failed"
+          if ! gh issue list --repo "$repo" --state open --limit 20 --search "in:title \"$title\"" | grep -q .; then
+            gh issue create --repo "$repo" --title "$title" --body "The hourly collection workflow failed.\n\n- Conclusion: $CONCLUSION\n- Run: $RUN_URL\n\nHuman review is required if the failure is persistent or involves API quota/credentials."
+          fi
+
+  check-freshness:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check Firebase freshness
+        env:
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python scripts/audit_readiness.py --max-assets 0 > readiness.json
+          python - <<'PY'
+          import json
+          import subprocess
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          data = json.loads(Path('readiness.json').read_text())
+          latest = data.get('latest_observation')
+          if not latest:
+              stale = True
+              age = None
+          else:
+              observed = datetime.fromisoformat(latest.replace('Z', '+00:00'))
+              age = (datetime.now(timezone.utc) - observed).total_seconds() / 3600
+              stale = age > 2.5
+
+          print(json.dumps({'latest_observation': latest, 'age_hours': age, 'stale': stale}))
+          if not stale:
+              raise SystemExit(0)
+
+          repo = subprocess.check_output(['gh', 'repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'], text=True).strip()
+          title = '[Collection Health] Firebase snapshots are stale'
+          if subprocess.run([
+              'gh', 'issue', 'list', '--repo', repo, '--state', 'open', '--limit', '20',
+              '--search', f'in:title "{title}"'
+          ], capture_output=True, text=True).stdout.strip():
+              raise SystemExit(0)
+
+          body = (
+              'The collection health monitor detected that Firebase has not received a recent observation.\n\n'
+              f'- Latest observation: {latest}\n'
+              f'- Age (hours): {age}\n'
+              '- Expected collection cadence: hourly\n\n'
+              'Check the Collect Crypto Market workflow and CoinMarketCap/API credentials if this persists.'
+          )
+          subprocess.run(['gh', 'issue', 'create', '--repo', repo, '--title', title, '--body', body], check=True)
+          PY
