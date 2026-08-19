@@ -1,9 +1,9 @@
 project:
   name: BrAInChain
-  phase: data_accumulation
+  phase: autonomous_project_control
   objective: >-
-    Accumulate trustworthy temporal market history and advance through
-    readiness audits without requiring routine manual workflow dispatches.
+    Operate the research pipeline autonomously from collection through data
+    readiness, audit recovery, PR/CI recovery, and bounded escalation.
 
 collection:
   workflow: collect-market.yml
@@ -26,6 +26,9 @@ horizons:
 agent_policy:
   poll_interval_minutes: 30
   auto_dispatch_audits: true
+  auto_retry_transient_workflows_once: true
+  auto_modify_source_code: false
+  auto_merge_pull_requests: false
   auto_modify_collection_frequency: false
   auto_change_label_thresholds: false
   auto_change_secrets: false
@@ -35,6 +38,8 @@ agent_policy:
     - collection-frequency changes
     - label methodology changes
     - destructive data operations
+    - persistent CI failures requiring source changes
+    - model or threshold promotion decisions
 
 readiness_policy:
   audit_workflow: firebase-dataset-audit.yml
@@ -46,3 +51,19 @@ readiness_policy:
     - 24h
     - 72h
     - 168h
+
+phase_2:
+  name: pr_ci_agent
+  workflow: pr-ci-guardian.yml
+  specification: brainchain-pr-ci-agent.md
+  bounded_retry_attempts: 1
+  automatic_merge: false
+
+phase_3:
+  name: autonomous_project_agent
+  workflow: project-autonomy.yml
+  specification: brainchain-project-agent.md
+  objective: >-
+    Unify collection health, readiness progression, audit recovery and PR/CI
+    recovery into one bounded control loop that escalates only at policy
+    boundaries.
