@@ -7,6 +7,7 @@ from typing import Any, Iterable, Mapping
 
 # Human-approved promotion from the 1h threshold calibration audit.
 ONE_HOUR_RETURN_THRESHOLD = 0.0025
+_THRESHOLD_EPSILON = 1e-12
 
 
 def _ts(value: Any) -> datetime | None:
@@ -29,9 +30,9 @@ def _price(row: Mapping[str, Any]) -> float | None:
 def _classify_return(value: float | None) -> str | None:
     if value is None:
         return None
-    if value >= ONE_HOUR_RETURN_THRESHOLD:
+    if value >= ONE_HOUR_RETURN_THRESHOLD - _THRESHOLD_EPSILON:
         return "up"
-    if value <= -ONE_HOUR_RETURN_THRESHOLD:
+    if value <= -ONE_HOUR_RETURN_THRESHOLD + _THRESHOLD_EPSILON:
         return "down"
     return "neutral"
 
@@ -40,7 +41,7 @@ def build_time_labels(rows: Iterable[Mapping[str, Any]], horizons_hours=(1, 6, 2
     """Create point-in-time labels without using observations after each horizon."""
     ordered = sorted(
         (row for row in rows if _ts(row.get("captured_at")) is not None and _price(row) is not None),
-        key=lambda r: (_ts(r.get("source_id")) or _ts(r.get("captured_at")), _ts(r.get("captured_at"))),
+        key=lambda r: (str(r.get("source_id") or r.get("symbol") or r.get("id") or ""), _ts(r.get("captured_at"))),
     )
     by_asset: dict[str, list[Mapping[str, Any]]] = {}
     for row in ordered:
