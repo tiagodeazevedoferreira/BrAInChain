@@ -1,8 +1,9 @@
 name: BrAInChain Data Readiness Orchestrator
 
 on:
-  schedule:
-    - cron: "47 * * * *"
+  workflow_run:
+    workflows: ["Collect Crypto Market"]
+    types: [completed]
   workflow_dispatch: {}
 
 permissions:
@@ -16,6 +17,9 @@ concurrency:
 
 jobs:
   assess-and-advance:
+    # Only advance automatically after a successful market collection.
+    # Manual dispatch remains available for recovery/diagnostics.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -30,16 +34,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Assess Firebase readiness and advance routine audits
+      - name: Assess Firebase readiness
         env:
           FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
           FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           mkdir -p .readiness
-
           PYTHONPATH=src python scripts/audit_firebase_dataset.py --max-assets 0 > .readiness/firebase.json
           PYTHONPATH=src python scripts/audit_history_depth.py --max-assets 0 > .readiness/history.json
           PYTHONPATH=src python scripts/audit_readiness.py --max-assets 0 > .readiness/readiness.json
@@ -71,18 +72,22 @@ jobs:
           print(json.dumps(state, sort_keys=True))
           PY
 
-          # Every readiness run refreshes the aggregate Firebase audit through
-          # its existing workflow. The orchestrator, not the maintainer, owns
-          # the dispatch button now.
-          gh workflow run firebase-dataset-audit.yml -f max_assets=0
-
+      - name: Advance only newly ready horizons
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
           python - <<'PY'
           import json
           import subprocess
           from pathlib import Path
 
           state = json.loads(Path('.readiness/state.json').read_text())
-          repo = subprocess.check_output(['gh', 'repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'], text=True).strip()
+          repo = subprocess.check_output(
+              ['gh', 'repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'],
+              text=True,
+          ).strip()
 
           def existing(title):
               out = subprocess.check_output([
@@ -97,6 +102,7 @@ jobs:
                   '--body', body, '--label', 'automation', '--label', 'data-readiness'
               ], check=True)
 
+          # No new horizon: nothing else to dispatch.
           for horizon in state['ready_horizons']:
               title = f'[Data Readiness] Horizon {horizon}h ready'
               if existing(title):
@@ -110,8 +116,6 @@ jobs:
                   f"- Latest observation: {state['latest_observation']}\n"
               )
 
-              # Dispatch only the audits that already exist. Never invent a
-              # workflow for a later horizon.
               workflows = ['history-depth-audit.yml', 'temporal-label-audit.yml']
               if horizon == 1:
                   workflows += ['1h-label-distribution-audit.yml', '1h-threshold-calibration-v2.yml']
