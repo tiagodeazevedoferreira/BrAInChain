@@ -1,0 +1,68 @@
+name: Project Autonomy Control Plane
+
+on:
+  workflow_run:
+    workflows:
+      - "Collect Crypto Market"
+      - "BrainChain Data Readiness"
+      - "Firebase Dataset Audit"
+      - "Asset History Depth Audit"
+      - "Temporal Label Audit"
+      - "1h Label Distribution Audit"
+      - "1h Threshold Calibration v2"
+      - "CI"
+    types: [completed]
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: brainchain-project-autonomy
+  cancel-in-progress: false
+
+jobs:
+  control-plane:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate project state and route automation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # The control plane is intentionally deterministic. It does not edit
+          # source code, secrets, collection cadence, thresholds, or data.
+          # It only routes already-authorized workflows and creates an issue
+          # when a human decision is genuinely required.
+
+          recent_failures=$(gh run list --repo "$REPOSITORY" --limit 50 --json name,conclusion,status,url \
+            --jq '[.[] | select(.conclusion == "failure")] | length')
+
+          if [ "$recent_failures" -ge 3 ]; then
+            title="[Project Autonomy] Multiple workflow failures require investigation"
+            body=$(cat <<EOF
+The autonomous control plane detected ${recent_failures} failed workflow runs in the recent run window.
+
+The system will not modify source code, secrets, collection cadence, label methodology, or data destructively.
+Review the failing workflows and resolve the root cause before allowing further autonomous progression.
+EOF
+            )
+            if ! gh issue list --repo "$REPOSITORY" --state open --limit 50 --search "in:title \"$title\"" | grep -q .; then
+              gh issue create --repo "$REPOSITORY" --title "$title" --body "$body"
+            fi
+          fi
+
+          # Ensure readiness is retriggerable from the control plane if a
+          # collection completed successfully but the downstream workflow did
+          # not start. The workflow itself is idempotent and performs its own
+          # horizon/state checks.
+          if gh run list --repo "$REPOSITORY" --workflow "Collect Crypto Market" --status success --limit 1 --json databaseId,conclusion | grep -q 'databaseId'; then
+            gh workflow run "brainchain-data-readiness.yml" --repo "$REPOSITORY" 2>/dev/null || true
+          fi
