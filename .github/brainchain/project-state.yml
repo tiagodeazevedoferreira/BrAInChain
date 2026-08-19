@@ -1,0 +1,48 @@
+project:
+  name: BrAInChain
+  phase: data_accumulation
+  objective: >-
+    Accumulate trustworthy temporal market history and advance through
+    readiness audits without requiring routine manual workflow dispatches.
+
+collection:
+  workflow: collect-market.yml
+  cadence: hourly
+  listings: 100
+  manual_collection_allowed: false
+
+horizons:
+  1h:
+    required_history_hours: 1
+  6h:
+    required_history_hours: 6
+  24h:
+    required_history_hours: 24
+  72h:
+    required_history_hours: 72
+  168h:
+    required_history_hours: 168
+
+agent_policy:
+  poll_interval_minutes: 30
+  auto_dispatch_audits: true
+  auto_modify_collection_frequency: false
+  auto_change_label_thresholds: false
+  auto_change_secrets: false
+  human_required_for:
+    - API quota or billing changes
+    - credentials or secrets
+    - collection-frequency changes
+    - label methodology changes
+    - destructive data operations
+
+readiness_policy:
+  audit_workflow: firebase-dataset-audit.yml
+  audit_max_assets: 0
+  dispatch_when_new_horizon_is_reached: true
+  horizons_in_order:
+    - 1h
+    - 6h
+    - 24h
+    - 72h
+    - 168h
