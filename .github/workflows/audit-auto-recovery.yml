@@ -1,0 +1,53 @@
+name: Audit Auto-Recovery
+
+on:
+  workflow_run:
+    workflows:
+      - "Firebase Dataset Audit"
+      - "History Depth Audit"
+      - "Temporal Label Audit"
+      - "1h Label Distribution Audit"
+      - "1h Threshold Calibration v2"
+    types: [completed]
+
+permissions:
+  actions: write
+  issues: write
+  contents: read
+
+jobs:
+  recover:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retry failed audit once
+        if: ${{ github.event.workflow_run.run_attempt == 1 }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          REPOSITORY: ${{ github.repository }}
+        run: gh run rerun "$RUN_ID" --failed --repo "$REPOSITORY"
+
+      - name: Escalate after retry
+        if: ${{ github.event.workflow_run.run_attempt > 1 }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          title="[Audit] Human action required: ${WORKFLOW_NAME}"
+          body=$(cat <<EOF
+          The ${WORKFLOW_NAME} workflow failed and its automatic retry was exhausted.
+
+          - Run: ${RUN_URL}
+          - Run ID: ${RUN_ID}
+
+          The recovery workflow intentionally stops after one retry. Investigate the failing job/logs before changing methodology or repeatedly rerunning it.
+          EOF
+          )
+          if ! gh issue list --repo "$REPOSITORY" --state open --limit 30 --search "in:title \"$title\"" | grep -q .; then
+            gh issue create --repo "$REPOSITORY" --title "$title" --body "$body"
+          fi
