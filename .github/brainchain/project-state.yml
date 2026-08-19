@@ -23,6 +23,15 @@ horizons:
   168h:
     required_history_hours: 168
 
+label_methodology:
+  one_hour_return_threshold: 0.0025
+  one_hour_return_threshold_percent: 0.25
+  decision: human_approved
+  evidence: >-
+    Threshold calibration produced 199 eligible observations with the most
+    balanced tested class distribution at 0.25%: down=17, neutral=91, up=91.
+  promoted_on: 2026-08-19
+
 agent_policy:
   poll_interval_minutes: 30
   auto_dispatch_audits: true
@@ -65,5 +74,4 @@ phase_3:
   specification: brainchain-project-agent.md
   objective: >-
     Unify collection health, readiness progression, audit recovery and PR/CI
-    recovery into one bounded control loop that escalates only at policy
-    boundaries.
+    recovery into one bounded control loop that escalates only at policy boundaries.
