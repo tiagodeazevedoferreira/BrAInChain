@@ -10,7 +10,7 @@ def test_majority_baseline_on_balanced_classes():
     assert result["strategy"] == "majority_class"
     assert result["majority_label"] == "down"
     assert result["balanced_accuracy"] == 1 / 3
-    assert result["macro_f1"] == 2 / 9
+    assert result["macro_f1"] == 1 / 6
 
 
 def test_balanced_accuracy_perfect_predictions():
