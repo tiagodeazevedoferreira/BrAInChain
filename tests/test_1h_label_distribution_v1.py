@@ -1,43 +1,37 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+
+from brainchain.labels import ONE_HOUR_RETURN_THRESHOLD, build_time_labels
 
 
-def classify(rows):
-    rows = sorted(rows, key=lambda r: r["captured_at"])
-    eligible = 0
-    labels = {"up_2pct": 0, "down_2pct": 0, "neutral": 0}
-    for i, row in enumerate(rows):
-        current = row["price"]
-        target = row["captured_at"] + __import__("datetime").timedelta(hours=1)
-        future = None
-        for candidate in rows[i + 1 :]:
-            if candidate["captured_at"] <= target:
-                future = candidate
-                continue
-            break
-        if future is None:
-            continue
-        elapsed = future["captured_at"] - row["captured_at"]
-        if elapsed < __import__("datetime").timedelta(minutes=45):
-            continue
-        eligible += 1
-        multiplier = future["price"] / current
-        if multiplier >= 1.02:
-            labels["up_2pct"] += 1
-        elif multiplier <= 0.98:
-            labels["down_2pct"] += 1
-        else:
-            labels["neutral"] += 1
-    return eligible, labels
-
-
-def test_uses_temporal_window_not_next_row():
+def test_promoted_threshold_is_symmetric():
     t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
     rows = [
-        {"captured_at": t0, "price": 100.0},
-        {"captured_at": t0.replace(minute=10), "price": 120.0},
-        {"captured_at": t0.replace(minute=50), "price": 101.0},
+        {"source_id": "1", "captured_at": t0, "price_usd": 100.0},
+        {"source_id": "1", "captured_at": t0 + timedelta(minutes=50), "price_usd": 100.25},
+        {"source_id": "2", "captured_at": t0, "price_usd": 100.0},
+        {"source_id": "2", "captured_at": t0 + timedelta(minutes=50), "price_usd": 99.75},
+        {"source_id": "3", "captured_at": t0, "price_usd": 100.0},
+        {"source_id": "3", "captured_at": t0 + timedelta(minutes=50), "price_usd": 100.20},
     ]
-    eligible, labels = classify(rows)
-    assert eligible == 1
-    assert labels["up_2pct"] == 0
-    assert labels["neutral"] == 1
+
+    labeled = build_time_labels(rows, horizons_hours=(1,))
+    by_asset = {row["source_id"]: row for row in labeled if row["captured_at"] == t0}
+
+    assert ONE_HOUR_RETURN_THRESHOLD == 0.0025
+    assert by_asset["1"]["label_1h_class"] == "up"
+    assert by_asset["2"]["label_1h_class"] == "down"
+    assert by_asset["3"]["label_1h_class"] == "neutral"
+
+
+def test_temporal_window_does_not_use_observations_after_one_hour():
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    rows = [
+        {"source_id": "1", "captured_at": t0, "price_usd": 100.0},
+        {"source_id": "1", "captured_at": t0 + timedelta(minutes=10), "price_usd": 120.0},
+        {"source_id": "1", "captured_at": t0 + timedelta(hours=1, minutes=10), "price_usd": 101.0},
+    ]
+
+    labeled = build_time_labels(rows, horizons_hours=(1,))
+    first = next(row for row in labeled if row["captured_at"] == t0)
+    assert first["label_1h_max_return"] == 0.20
+    assert first["label_1h_class"] == "up"

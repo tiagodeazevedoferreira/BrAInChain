@@ -5,7 +5,7 @@ import json
 from collections import Counter
 
 from brainchain.firebase_reader import FirebaseReader
-from brainchain.labels import build_time_labels
+from brainchain.labels import ONE_HOUR_RETURN_THRESHOLD, build_time_labels
 
 
 def main() -> int:
@@ -18,8 +18,7 @@ def main() -> int:
         rows = rows[: args.max_assets]
 
     # Reuse the production label builder so this audit uses the same
-    # price field (price_usd, with price as fallback) and temporal semantics
-    # as the supervised-label pipeline.
+    # price field, temporal semantics, and promoted 1h threshold as training.
     labeled = build_time_labels(rows, horizons_hours=(1,))
 
     labels = Counter()
@@ -29,15 +28,13 @@ def main() -> int:
         if value is None:
             continue
         eligible += 1
-        multiplier = 1.0 + float(value)
-        if multiplier >= 1.02:
-            labels["up_2pct"] += 1
-        elif multiplier <= 0.98:
-            labels["down_2pct"] += 1
-        else:
-            labels["neutral"] += 1
+        labels[row.get("label_1h_class")] += 1
 
-    print(json.dumps({"eligible": eligible, "labels": dict(labels)}, sort_keys=True))
+    print(json.dumps({
+        "eligible": eligible,
+        "threshold": ONE_HOUR_RETURN_THRESHOLD,
+        "labels": dict(labels),
+    }, sort_keys=True))
     return 0
 
 
