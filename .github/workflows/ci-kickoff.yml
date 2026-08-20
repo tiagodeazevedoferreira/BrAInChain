@@ -1,0 +1,26 @@
+name: CI Kickoff
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit or branch to validate"
+        required: true
+        default: "main"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  kickoff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e .
+      - run: pytest -q
