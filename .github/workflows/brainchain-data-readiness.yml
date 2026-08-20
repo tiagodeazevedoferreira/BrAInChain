@@ -44,6 +44,7 @@ jobs:
           PYTHONPATH=src python scripts/audit_firebase_dataset.py --max-assets 0 > .readiness/firebase.json
           PYTHONPATH=src python scripts/audit_history_depth.py --max-assets 0 > .readiness/history.json
           PYTHONPATH=src python scripts/audit_readiness.py --max-assets 0 > .readiness/readiness.json
+          PYTHONPATH=src python scripts/audit_training_1h_readiness.py --max-assets 0 > .readiness/training_1h.json
 
           python - <<'PY'
           import json
@@ -51,6 +52,7 @@ jobs:
 
           history = json.loads(Path('.readiness/history.json').read_text())
           readiness = json.loads(Path('.readiness/readiness.json').read_text())
+          training_1h = json.loads(Path('.readiness/training_1h.json').read_text())
           assets = max(1, int(readiness.get('assets', 0)))
           coverage_target = 0.90
 
@@ -67,6 +69,7 @@ jobs:
               'ready_horizons': ready,
               'max_history_hours': history.get('history_hours', {}).get('max'),
               'latest_observation': readiness.get('latest_observation'),
+              'training_1h': training_1h,
           }
           Path('.readiness/state.json').write_text(json.dumps(state, indent=2, sort_keys=True))
           print(json.dumps(state, sort_keys=True))
@@ -99,7 +102,7 @@ jobs:
           def create_issue(title, body):
               subprocess.run([
                   'gh', 'issue', 'create', '--repo', repo, '--title', title,
-                  '--body', body, '--label', 'automation', '--label', 'data-readiness'
+                  '--body', body, '--label', 'data-readiness'
               ], check=True)
 
           # No new horizon: nothing else to dispatch.
@@ -114,6 +117,7 @@ jobs:
                   f"- Assets: {state['assets']}\n"
                   f"- Max history: {state['max_history_hours']}h\n"
                   f"- Latest observation: {state['latest_observation']}\n"
+                  f"- 1h training readiness: {json.dumps(state['training_1h'], sort_keys=True)}\n"
               )
 
               workflows = ['history-depth-audit.yml', 'temporal-label-audit.yml']
