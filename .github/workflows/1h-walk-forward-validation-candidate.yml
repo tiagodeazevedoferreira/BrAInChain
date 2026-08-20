@@ -1,0 +1,45 @@
+name: 1h Walk-Forward Validation - Candidate
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: brainchain-1h-walk-forward
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          ref: feat/train-1h-evaluation
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Walk-forward validation
+        env:
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+        run: |
+          set -euo pipefail
+          mkdir -p .walk-forward
+          PYTHONPATH=src python scripts/validate_1h_walk_forward.py | tee .walk-forward/metrics.json
+
+      - name: Upload validation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: brainchain-1h-walk-forward-${{ github.run_id }}
+          path: .walk-forward/metrics.json
+          retention-days: 14
