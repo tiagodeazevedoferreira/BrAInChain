@@ -1,0 +1,41 @@
+name: 1h Error Analysis - Candidate
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main candidate
+        uses: actions/checkout@v4
+        with:
+          ref: feat/1h-error-analysis
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run 1h error analysis
+        env:
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+        run: |
+          set -euo pipefail
+          mkdir -p .training
+          PYTHONPATH=src python scripts/analyze_1h_walk_forward.py | tee .training/error-analysis.json
+
+      - name: Upload analysis evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: brainchain-1h-error-analysis-${{ github.run_id }}
+          path: .training/error-analysis.json
+          retention-days: 14
