@@ -66,7 +66,7 @@ def train_1h_baseline(
         raise ValueError("validation data has no complete labeled rows")
     model = make_pipeline(
         StandardScaler(),
-        LogisticRegression(max_iter=1000, class_weight="balanced", multi_class="auto"),
+        LogisticRegression(max_iter=1000, class_weight="balanced"),
     )
     model.fit(X_train, y_train)
     predictions = model.predict(X_val)

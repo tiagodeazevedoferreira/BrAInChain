@@ -1,0 +1,43 @@
+name: 1h Training Evaluation
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: brainchain-1h-training-evaluation
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Evaluate 1h model
+        env:
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+        run: |
+          set -euo pipefail
+          mkdir -p .training
+          PYTHONPATH=src python scripts/train_1h_evaluation.py | tee .training/metrics.json
+
+      - name: Upload training evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: brainchain-1h-training-${{ github.run_id }}
+          path: .training/metrics.json
+          retention-days: 14
