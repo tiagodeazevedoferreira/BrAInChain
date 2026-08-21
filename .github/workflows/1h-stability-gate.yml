@@ -1,0 +1,42 @@
+name: 1h Stability Gate - Candidate
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          ref: feat/1h-stability-gate
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run 1h stability gate
+        env:
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+        run: |
+          set -euo pipefail
+          mkdir -p .training
+          PYTHONPATH=src python scripts/gate_1h_stability.py | tee .training/stability-gate.json
+
+      - name: Upload stability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: brainchain-1h-stability-gate-${{ github.run_id }}
+          path: .training/stability-gate.json
+          retention-days: 14
